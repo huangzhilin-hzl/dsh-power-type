@@ -1,0 +1,10 @@
+node_modules/
+artifacts/
+coverage/
+.DS_Store
+.env
+.env.*
+*.log
+demo/*.png
+demo/local-*.gif
+demo/.frames/

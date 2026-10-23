@@ -1,0 +1,6 @@
+# Bundle patch layer: the row loads the package's Host entry (`index.js`).
+# The `dsh.client` declaration makes the Web app load `./client.js` as the
+# browser half, where the typing effect lives.
+- insert:
+    - id: power-type
+      name: dsh-power-type
