@@ -397,9 +397,10 @@ window.__ModuleLoader__.load({
           const p = clamp((Number(combo) || 0) / 30, 0, 1)
           const degree = DEGREES[Math.min(DEGREES.length - 1, Math.round(p * (DEGREES.length - 1)))]
           const frequency = 196 * Math.pow(2, degree / 12)
-          voice({ wave: 'sine', f0: frequency, f1: frequency * 1.02, dur: 0.055, gain: 0.07, cut: 1200, q: 0.6 })
+          voice({ wave: 'sine', f0: frequency, f1: frequency * 1.02, dur: 0.062, gain: 0.18, cut: 1800, q: 0.6 })
+          voice({ wave: 'sine', f0: frequency / 2, f1: frequency / 2, dur: 0.08, gain: 0.05, cut: 900, q: 0.5 })
           if ((Number(combo) || 0) > 0 && Number(combo) % 25 === 0) {
-            voice({ wave: 'sine', f0: frequency / 2, f1: frequency / 2, dur: 0.12, gain: 0.07, cut: 1200, q: 0.7 })
+            voice({ wave: 'sine', f0: frequency / 2, f1: frequency / 2, dur: 0.12, gain: 0.08, cut: 1200, q: 0.7 })
           }
         },
         /** Submit impact: body weight, paper noise and a bright confirm. */
