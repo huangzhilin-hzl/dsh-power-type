@@ -400,17 +400,15 @@ window.__ModuleLoader__.load({
             const degree = DEGREES[Math.min(DEGREES.length - 1, Math.round(p * (DEGREES.length - 1)) + index)]
             const frequency = 196 * Math.pow(2, degree / 12)
             const at = index * 0.032
-            voice({ wave: 'sine', f0: frequency, f1: frequency * 1.02, dur: 0.062, gain: index === 0 ? 0.18 : 0.13, cut: 1800, q: 0.6, at })
-            if (index === 0) {
-              voice({ wave: 'sine', f0: frequency / 2, f1: frequency / 2, dur: 0.08, gain: 0.05, cut: 900, q: 0.5, at })
-            }
+            voice({ wave: 'sine', f0: frequency, f1: frequency * 1.02, dur: 0.05, gain: index === 0 ? 0.16 : 0.12, cut: 1600, q: 0.5, attack: 0.005, at })
+            voice({ wave: 'sine', f0: frequency * 2, f1: frequency * 2.01, dur: 0.04, gain: index === 0 ? 0.035 : 0.025, cut: 2200, q: 0.5, attack: 0.004, at })
             played += 1
           }
           if ((Number(combo) || 0) > 0 && Number(combo) % 25 === 0) {
             const firstP = clamp(Math.max(1, (Number(combo) || 0) - count + 1) / 30, 0, 1)
             const firstDegree = DEGREES[Math.min(DEGREES.length - 1, Math.round(firstP * (DEGREES.length - 1)))]
             const frequency = 196 * Math.pow(2, firstDegree / 12)
-            voice({ wave: 'sine', f0: frequency / 2, f1: frequency / 2, dur: 0.12, gain: 0.08, cut: 1200, q: 0.7 })
+            voice({ wave: 'sine', f0: frequency / 2, f1: frequency / 2, dur: 0.1, gain: 0.05, cut: 900, q: 0.6 })
           }
         },
         /** Submit impact: body weight, paper noise and a bright confirm. */
@@ -419,8 +417,8 @@ window.__ModuleLoader__.load({
           played += 1
           // Soft G-major chime over a low body: warm, short and legible without
           // any square/triangle harmonics or bright noise.
-          voice({ noise: true, type: 'lowpass', cut: 900, q: 0.4, dur: 0.04, gain: 0.08 })
-          voice({ wave: 'sine', f0: 110, f1: 55, dur: 0.2, gain: 0.5, cut: 450, q: 0.5, attack: 0.005 })
+          voice({ noise: true, type: 'lowpass', cut: 800, q: 0.4, dur: 0.035, gain: 0.05 })
+          voice({ wave: 'sine', f0: 130, f1: 65, dur: 0.22, gain: 0.32, cut: 420, q: 0.5, attack: 0.006 })
           voice({ wave: 'sine', f0: 196, f1: 196, dur: 0.32, gain: 0.36, cut: 1200, q: 0.5, at: 0.02 })
           voice({ wave: 'sine', f0: 293.66, f1: 293.66, dur: 0.28, gain: 0.2, cut: 1400, q: 0.5, at: 0.05 })
           voice({ wave: 'sine', f0: 392, f1: 392, dur: 0.26, gain: 0.14, cut: 1600, q: 0.5, at: 0.1 })
