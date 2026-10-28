@@ -273,6 +273,18 @@ test('mount, ordinary input, Enter, disable and unmount preserve the public cont
   assert.ok(f.calls.clearRect > 0)
 })
 
+test('a multi-character IME commit counts glyphs and thickens the tick', async (t) => {
+  const f = mount(t, { fakeAudio: true })
+  f.compose('compositionstart')
+  f.text('你好')
+  f.compose('compositionend', '你好')
+  await settle()
+  const stats = f.api.stats()
+  assert.equal(stats.combo, 2, 'two committed CJK glyphs should count as two')
+  assert.ok(stats.sound.played >= 2, 'the commit should schedule a short tick run')
+  assert.ok(stats.heat > 0)
+})
+
 test('IME intermediate text is quiet and a Chromium-style final composing input commits once', async (t) => {
   const f = mount(t)
   f.compose('compositionstart')

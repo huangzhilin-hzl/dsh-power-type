@@ -11,6 +11,7 @@
 - 光标粒子、文字发光残影与输入框震动。
 - 连击越高，当前输入行会越热：暖黄 → 橙色 → 红色，伴随热浪细纹和上升余烬。
 - 热浪只包当前文字行，不画输入框边框，也不出结算卡片。
+- 连击按可视字符数累积：英文逐键，中文一次提交多个字时会补足连击和按键 tick 密度。
 - 每次敲击有轻量合成音效，Enter 有更重的冲击音；可独立关闭或调音量。
 - 支持中文等输入法的组合输入；深色/浅色主题自动适配。
 
@@ -47,7 +48,7 @@ dsh plugin --profile web add /absolute/path/to/dsh-power-type
 ```js
 window.__dshPowerType.setIntensity(1.5)     // 默认 1，范围 0.2–2.5
 window.__dshPowerType.setSoundEnabled(false) // 关闭敲击/Enter 音效
-window.__dshPowerType.setVolume(0.5)         // 0–1，默认 0.8
+window.__dshPowerType.setVolume(0.5)         // 0–1，默认 0.9
 ```
 
 设置保存在当前浏览器本地。

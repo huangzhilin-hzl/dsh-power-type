@@ -11,6 +11,7 @@ Power Mode typing effects for the **DeepSeek Harness (DSH) Web composer**: spark
 - Caret particles, glowing character echoes and editor shake.
 - The current text line heats up with the streak: amber → orange → red, with heat shimmer and rising embers.
 - Heat wraps the text only: no composer border and no settlement card.
+- Combo counts visible glyphs: English adds per key, while a multi-character IME commit fills in the matching streak and tick density.
 - A quiet synthesized tick per keystroke; a heavier impact on Enter, with independent mute and volume.
 - Chinese and other IME composition support, plus light/dark theme adaptation.
 
@@ -47,7 +48,7 @@ Adjust intensity and sound in the browser console:
 ```js
 window.__dshPowerType.setIntensity(1.5)      // Default: 1; range: 0.2–2.5
 window.__dshPowerType.setSoundEnabled(false) // Mute key/Enter cues
-window.__dshPowerType.setVolume(0.5)         // 0–1, default 0.8
+window.__dshPowerType.setVolume(0.5)         // 0–1, default 0.9
 ```
 
 Settings are saved locally in the browser.
