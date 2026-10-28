@@ -230,20 +230,6 @@ test('real Chromium + DSH Lexical regressions', { timeout: 90000 }, async (t) =>
       assert.ok(result.events.some((event) => event.type === 'input' && event.data === 'b'), 'exercise beforeinput + input deduplication')
     })
 
-    await t.test('typing warms the text and schedules quiet key ticks', async () => {
-      await fresh()
-      for (const character of 'abcd') await press(character)
-      const typing = await snapshot()
-      assert.equal(typing.stats.combo, 4, JSON.stringify(typing))
-      assert.ok(typing.stats.heat > 0, 'the streak must warm the text')
-      assert.ok(typing.stats.particles > 0)
-      assert.ok(typing.stats.sound.played > 0, 'key ticks should schedule in the real browser')
-      await press('Enter')
-      const impact = await snapshot()
-      assert.ok(impact.stats.sound.played > typing.stats.sound.played, 'Enter should add an impact cue')
-      assert.ok(impact.stats.waves > 0)
-    })
-
     await t.test('typing warms the current text line and schedules key ticks', async () => {
       await fresh()
       for (const character of 'abcd') await press(character)
