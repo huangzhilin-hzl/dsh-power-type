@@ -156,6 +156,8 @@ test('real Chromium + DSH Lexical regressions', { timeout: 90000 }, async (t) =>
     const base = `http://127.0.0.1:${server.address().port}`
     chrome = spawn(await chromeExecutable(), [
       '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+      '--autoplay-policy=no-user-gesture-required',
+      '--autoplay-policy=no-user-gesture-required',
       '--disable-background-timer-throttling', '--disable-backgrounding-occluded-windows',
       '--remote-debugging-port=0', `--user-data-dir=${directory}`, '--window-size=1024,768', 'about:blank',
     ], { stdio: ['ignore', 'ignore', 'pipe'] })
@@ -226,6 +228,20 @@ test('real Chromium + DSH Lexical regressions', { timeout: 90000 }, async (t) =>
       assert.equal(result.text, 'ab', JSON.stringify(result))
       assert.equal(result.stats.combo, 2, JSON.stringify(result))
       assert.ok(result.events.some((event) => event.type === 'input' && event.data === 'b'), 'exercise beforeinput + input deduplication')
+    })
+
+    await t.test('typing warms the current text line and schedules key ticks', async () => {
+      await fresh()
+      for (const character of 'abcd') await press(character)
+      const typing = await snapshot()
+      assert.equal(typing.stats.combo, 4, JSON.stringify(typing))
+      assert.ok(typing.stats.heat > 0, 'the streak must warm the text')
+      assert.ok(typing.stats.particles > 0)
+      assert.ok(typing.stats.sound.played > 0, 'key ticks should schedule in the real browser')
+      await press('Enter')
+      const impact = await snapshot()
+      assert.ok(impact.stats.sound.played > typing.stats.sound.played, 'Enter should add an impact cue')
+      assert.ok(impact.stats.waves > 0)
     })
 
     await t.test('toolbar Enter stays quiet while composer Enter produces a burst', async () => {

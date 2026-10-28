@@ -19,10 +19,21 @@ window.__ModuleLoader__.load({
     const PLUGIN_ID = 'dsh-power-type'
     const ENABLED_KEY = 'dsh-power-type.enabled'
     const INTENSITY_KEY = 'dsh-power-type.intensity'
+    const SOUND_KEY = 'dsh-power-type.sound'
+    const VOLUME_KEY = 'dsh-power-type.volume'
     const TAU = Math.PI * 2
     const IDLE_RESET_MS = 1600
     const COMBO_FADE_MS = 420
     const MAX_PARTICLES = 520
+    const HEAT_FULL_COMBO = 20
+
+    // Warm heat ramp; it does not start red, so the reddening is visible.
+    const HEAT_STOPS = [
+      { at: 0, color: [255, 204, 112] },
+      { at: 0.42, color: [255, 146, 58] },
+      { at: 0.74, color: [255, 76, 38] },
+      { at: 1, color: [255, 32, 24] },
+    ]
 
     const clamp = (value, low, high) => Math.min(high, Math.max(low, value))
     const rand = (low, high) => low + Math.random() * (high - low)
@@ -47,6 +58,47 @@ window.__ModuleLoader__.load({
         return 1
       }
     }
+
+    /** Sound is part of the impact, but it must always be switchable. */
+    function readSoundEnabled(win) {
+      try {
+        return win.localStorage.getItem(SOUND_KEY) !== '0'
+      } catch {
+        return true
+      }
+    }
+
+    /** A deliberately quiet default: the synth sits under the UI, not over it. */
+    function readVolume(win) {
+      try {
+        const raw = win.localStorage.getItem(VOLUME_KEY)
+        if (raw === null) return 0.8
+        const value = Number(raw)
+        return Number.isFinite(value) && value >= 0 ? clamp(value, 0, 1) : 0.8
+      } catch {
+        return 0.7
+      }
+    }
+
+    /** Walk the warm heat ramp; the streak turns the text from amber to red. */
+    function heatColor(heat) {
+      const value = clamp(heat, 0, 1)
+      let low = HEAT_STOPS[0]
+      let high = HEAT_STOPS[HEAT_STOPS.length - 1]
+      for (let index = 1; index < HEAT_STOPS.length; index += 1) {
+        if (value <= HEAT_STOPS[index].at) {
+          low = HEAT_STOPS[index - 1]
+          high = HEAT_STOPS[index]
+          break
+        }
+      }
+      const span = Math.max(1e-6, high.at - low.at)
+      const mix = clamp((value - low.at) / span, 0, 1)
+      return low.color.map((channel, index) => Math.round(channel + (high.color[index] - channel) * mix))
+    }
+
+    const rgb = (color, alpha = 1) => `rgba(${color[0]}, ${color[1]}, ${color[2]}, ${alpha})`
+    const heatFor = (combo) => Math.sqrt(clamp((Number(combo) || 0) / HEAT_FULL_COMBO, 0, 1))
 
     /** Decide whether a CSS color is dark enough to switch the glow blend. */
     function isDarkColor(color) {
@@ -161,6 +213,266 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * A small WebAudio impact synth: a quiet pentatonic key tick and a heavier
+     * submit thump. No audio files, no network, no timers.
+     */
+    function createImpactAudio(win) {
+      const BASE_GAIN = 1.0
+      const CURVE = 1.6
+      const MAX_VOICES = 14
+      const TYPE_VOICES = 7
+      const SILENT = 0.0001
+      const NOISE_SEC = 0.4
+      const DEGREES = [0, 2, 4, 7, 9, 12, 14, 16, 19]
+
+      let context = null
+      let master = null
+      let compressor = null
+      let noise = null
+      let enabled = true
+      let volume = 0.8
+      let played = 0
+      let dropped = 0
+      let paused = false
+      let disposed = false
+      let lastType = -1
+      const voices = new Set()
+
+      const gainFor = () => (enabled ? BASE_GAIN * Math.pow(clamp(volume, 0, 1), CURVE) : SILENT)
+
+      function applyGain() {
+        if (context === null || master === null) return
+        try {
+          master.gain.cancelScheduledValues(context.currentTime)
+          master.gain.setTargetAtTime(gainFor(), context.currentTime, 0.012)
+        } catch {
+          // A closing context can race the last cue.
+        }
+      }
+
+      function ensure() {
+        if (disposed) return false
+        try {
+          if (context === null) {
+            const AudioCtor = win && (win.AudioContext ?? win.webkitAudioContext)
+            if (typeof AudioCtor !== 'function') return false
+            try {
+              context = new AudioCtor({ latencyHint: 'interactive' })
+            } catch {
+              context = new AudioCtor()
+            }
+            compressor = context.createDynamicsCompressor()
+            compressor.threshold.value = -14
+            compressor.knee.value = 12
+            compressor.ratio.value = 4
+            compressor.attack.value = 0.004
+            compressor.release.value = 0.14
+            master = context.createGain()
+            master.gain.value = gainFor()
+            master.connect(compressor)
+            compressor.connect(context.destination)
+          }
+          paused = false
+          if (context.state !== 'running' && context.state !== 'closed') {
+            const resumed = context.resume?.()
+            if (resumed && typeof resumed.catch === 'function') resumed.catch(() => {})
+          }
+          return true
+        } catch {
+          try {
+            const closed = context?.close?.()
+            if (closed && typeof closed.catch === 'function') closed.catch(() => {})
+          } catch {
+            // A half-built context is unusable.
+          }
+          context = null
+          master = null
+          compressor = null
+          noise = null
+          return false
+        }
+      }
+
+      function noiseBuffer() {
+        if (noise === null) {
+          noise = context.createBuffer(1, Math.ceil(context.sampleRate * NOISE_SEC), context.sampleRate)
+          const data = noise.getChannelData(0)
+          for (let index = 0; index < data.length; index += 1) data[index] = Math.random() * 2 - 1
+        }
+        return noise
+      }
+
+      function own(source, chain) {
+        voices.add(source)
+        source.onended = () => {
+          voices.delete(source)
+          for (const node of chain) {
+            try { node.disconnect() } catch { /* Already detached. */ }
+          }
+        }
+      }
+
+      function canPlay(limit) {
+        if (disposed || !enabled || paused || volume <= 0 || context === null
+          || master === null || context.state !== 'running') return false
+        if (voices.size >= limit) {
+          dropped += 1
+          return false
+        }
+        return true
+      }
+
+      function voice(options) {
+        if (context === null || master === null) return
+        const startsAt = context.currentTime + (options.at || 0)
+        const source = options.noise ? context.createBufferSource() : context.createOscillator()
+        const filter = context.createBiquadFilter()
+        const gain = context.createGain()
+        filter.type = options.type || 'lowpass'
+        filter.Q.value = options.q
+        filter.frequency.setValueAtTime(options.cut, startsAt)
+        if (options.noise) {
+          source.buffer = noiseBuffer()
+        } else {
+          source.type = options.wave
+          source.frequency.setValueAtTime(options.f0, startsAt)
+          if (options.f1 !== options.f0) source.frequency.exponentialRampToValueAtTime(options.f1, startsAt + options.dur)
+        }
+        gain.gain.setValueAtTime(SILENT, startsAt)
+        gain.gain.exponentialRampToValueAtTime(options.gain, startsAt + (options.attack || 0.0025))
+        gain.gain.exponentialRampToValueAtTime(SILENT, startsAt + options.dur)
+        source.connect(filter)
+        filter.connect(gain)
+        gain.connect(master)
+        if (options.noise) source.start(startsAt, Math.random() * Math.max(0, NOISE_SEC - options.dur - 0.02), options.dur)
+        else {
+          source.start(startsAt)
+          source.stop(startsAt + options.dur + 0.02)
+        }
+        own(source, [source, filter, gain])
+      }
+
+      function stopVoices() {
+        for (const source of voices) {
+          try {
+            source.onended = null
+            source.stop(0)
+            source.disconnect()
+          } catch {
+            // Some sources have not started yet.
+          }
+        }
+        voices.clear()
+      }
+
+      return {
+        ensure,
+        setEnabled(next) {
+          enabled = next !== false
+          if (enabled) paused = false
+          else {
+            paused = true
+            stopVoices()
+          }
+          applyGain()
+          if (enabled && context !== null && context.state === 'suspended') ensure()
+          return enabled
+        },
+        setVolume(next) {
+          const value = Number(next)
+          if (Number.isFinite(value)) volume = clamp(value, 0, 1)
+          applyGain()
+          return volume
+        },
+        /** A short pentatonic blip whose pitch climbs with the streak. */
+        type(combo) {
+          if (!canPlay(TYPE_VOICES)) return
+          const now = context.currentTime
+          if (now - lastType < 0.022) {
+            dropped += 1
+            return
+          }
+          lastType = now
+          played += 1
+          const p = clamp((Number(combo) || 0) / 30, 0, 1)
+          const degree = DEGREES[Math.min(DEGREES.length - 1, Math.round(p * (DEGREES.length - 1)))]
+          const frequency = 196 * Math.pow(2, degree / 12)
+          voice({ wave: 'sine', f0: frequency, f1: frequency * 1.02, dur: 0.055, gain: 0.07, cut: 1200, q: 0.6 })
+          if ((Number(combo) || 0) > 0 && Number(combo) % 25 === 0) {
+            voice({ wave: 'sine', f0: frequency / 2, f1: frequency / 2, dur: 0.12, gain: 0.07, cut: 1200, q: 0.7 })
+          }
+        },
+        /** Submit impact: body weight, paper noise and a bright confirm. */
+        impact() {
+          if (!canPlay(MAX_VOICES)) return
+          played += 1
+          // Soft G-major chime over a low body: warm, short and legible without
+          // any square/triangle harmonics or bright noise.
+          voice({ noise: true, type: 'lowpass', cut: 900, q: 0.4, dur: 0.04, gain: 0.08 })
+          voice({ wave: 'sine', f0: 110, f1: 55, dur: 0.2, gain: 0.5, cut: 450, q: 0.5, attack: 0.005 })
+          voice({ wave: 'sine', f0: 196, f1: 196, dur: 0.32, gain: 0.36, cut: 1200, q: 0.5, at: 0.02 })
+          voice({ wave: 'sine', f0: 293.66, f1: 293.66, dur: 0.28, gain: 0.2, cut: 1400, q: 0.5, at: 0.05 })
+          voice({ wave: 'sine', f0: 392, f1: 392, dur: 0.26, gain: 0.14, cut: 1600, q: 0.5, at: 0.1 })
+        },
+        suspend() {
+          paused = true
+          stopVoices()
+          try {
+            if (context !== null && context.state === 'running') {
+              const suspended = context.suspend?.()
+              if (suspended && typeof suspended.catch === 'function') suspended.catch(() => {})
+            }
+          } catch {
+            // Already closed.
+          }
+        },
+        resume() {
+          paused = false
+          try {
+            if (context !== null && context.state === 'suspended') {
+              const resumed = context.resume?.()
+              if (resumed && typeof resumed.catch === 'function') resumed.catch(() => {})
+            }
+          } catch {
+            // Already closed.
+          }
+        },
+        dispose() {
+          if (disposed) return
+          disposed = true
+          paused = true
+          stopVoices()
+          try { master?.disconnect() } catch { /* Already detached. */ }
+          try { compressor?.disconnect() } catch { /* Already detached. */ }
+          try {
+            if (context !== null && context.state !== 'closed') {
+              const closed = context.close?.()
+              if (closed && typeof closed.catch === 'function') closed.catch(() => {})
+            }
+          } catch {
+            // Already closed.
+          }
+          context = null
+          master = null
+          compressor = null
+          noise = null
+        },
+        stats() {
+          return {
+            ready: context !== null && master !== null && context.state === 'running',
+            state: context === null ? 'none' : context.state,
+            enabled,
+            volume,
+            played,
+            voices: voices.size,
+            dropped,
+            paused,
+          }
+        },
+      }
+    }
+
+    /**
      * Create the effect engine for one canvas.
      * @param canvas - the transparent overlay canvas.
      * @returns lifecycle controls and the runtime tuning API.
@@ -199,6 +511,11 @@ window.__ModuleLoader__.load({
       let editorScope = null
       let sessionObserver = null
       let api = null
+      let heat = 0
+      let impactHeat = 0
+      let lineRect = null
+      let soundEnabled = readSoundEnabled(win)
+      let volume = readVolume(win)
 
       const particles = []
       const waves = []
@@ -206,6 +523,20 @@ window.__ModuleLoader__.load({
       const strikes = []
       const pendingInputs = new Map()
       const animations = new Set()
+      const audio = createImpactAudio(win)
+      audio.setEnabled(soundEnabled)
+      audio.setVolume(volume)
+
+      /** Audio is decorative: a broken graph must never break the animation. */
+      function cue(method, ...args) {
+        if (!soundEnabled) return false
+        try {
+          audio.ensure()
+          return audio[method](...args)
+        } catch {
+          return false
+        }
+      }
 
       /** One monotonic clock shared by input events and animation frames. */
       const clock = () => win.performance.now()
@@ -219,6 +550,7 @@ window.__ModuleLoader__.load({
         canvas.width = Math.max(1, Math.round(width * dpr))
         canvas.height = Math.max(1, Math.round(height * dpr))
         if (context !== null) context.setTransform(dpr, 0, 0, dpr, 0, 0)
+        if (lastEditor !== null && lastEditor.isConnected) lineRect = currentLineRect(lastEditor)
       }
 
       /** Re-sample theme tokens at most once per second. */
@@ -280,6 +612,136 @@ window.__ModuleLoader__.load({
           life,
           age: 0,
         })
+      }
+
+      /** Ember particles rise and glow; they share the existing particle loop. */
+      function spawnEmbers(point, count, strength, spread = 24) {
+        if (reducedMotion || context === null) return
+        const total = Math.round(count * intensity)
+        const color = rgb(heatColor(strength), 0.95)
+        for (let index = 0; index < total; index += 1) {
+          if (particles.length >= MAX_PARTICLES) particles.shift()
+          particles.push({
+            x: point.x + rand(-spread, spread),
+            y: point.y + rand(-2, 6),
+            vx: rand(-26, 26),
+            vy: rand(-92, -34),
+            gravity: rand(-105, -38),
+            drag: rand(0.986, 0.996),
+            size: rand(1, 2.6) * (0.8 + strength * 0.6),
+            life: rand(0.34, 0.82),
+            age: 0,
+            color: Math.random() < 0.22 ? '#fff2c9' : color,
+            angle: 0,
+            spin: 0,
+            shape: 'ember',
+          })
+        }
+      }
+
+      /** Convert the editor's text fragments into canvas-local line boxes. */
+      function textLineRects(editor, canvasRect) {
+        if (typeof editor.value === 'string') return []
+        const range = doc.createRange()
+        range.selectNodeContents(editor)
+        if (typeof range.getClientRects !== 'function') return []
+        return Array.from(range.getClientRects())
+          .filter((rect) => rect.width > 0 && rect.height > 0)
+          .slice(0, 12)
+          .map((rect) => ({
+            left: rect.left - canvasRect.left,
+            top: rect.top - canvasRect.top,
+            width: rect.width,
+            height: rect.height,
+          }))
+      }
+
+      /** The line box that contains the caret: the flames follow the text. */
+      function currentLineRect(editor) {
+        const canvasRect = canvas.getBoundingClientRect()
+        const caret = caretOf(win, editor)
+        const caretTop = caret.top - canvasRect.top
+        const caretBottom = caret.bottom - canvasRect.top
+        const lines = textLineRects(editor, canvasRect)
+        const matching = lines.filter((line) => caretTop < line.top + line.height && caretBottom > line.top)
+        const candidates = matching.length > 0 ? matching : lines.slice(-1)
+        if (candidates.length === 0) return null
+        const left = Math.min(...candidates.map((line) => line.left))
+        const right = Math.max(...candidates.map((line) => line.left + line.width))
+        const top = Math.min(...candidates.map((line) => line.top))
+        const bottom = Math.max(...candidates.map((line) => line.top + line.height))
+        return { left, right, top, bottom, width: right - left, height: bottom - top }
+      }
+
+      /** Heat waves and embers rise from the glyphs; no box, no flame shapes. */
+      function drawHeat(now) {
+        if (context === null || reducedMotion || lastEditor === null || !lastEditor.isConnected) return
+        const strength = clamp(heat, 0, 1)
+        if (strength < 0.01 && impactHeat < 0.01) return
+        const line = lineRect
+        if (line === null || line.width <= 0 || textOf(lastEditor).trim().length === 0) return
+        const color = heatColor(strength)
+        const time = now / 1000
+        const power = 0.75 + intensity * 0.3
+
+        context.save()
+        context.globalCompositeOperation = palette.dark ? 'lighter' : 'source-over'
+        context.lineCap = 'round'
+
+        // Three thin, traveling heat bands above the glyph line.
+        const shimmer = heatColor(strength * 0.62)
+        for (let band = 0; band < 2; band += 1) {
+          const base = line.top - 2 - band * 4 + Math.sin(time * 2.2 + band * 1.7) * 1.4
+          context.beginPath()
+          for (let x = line.left - 4; x <= line.right + 4; x += 5) {
+            const y = base + Math.sin((x - line.left) * 0.038 + time * (2.6 + band) + band * 1.4) * 1.1
+            if (x === line.left - 4) context.moveTo(x, y)
+            else context.lineTo(x, y)
+          }
+          context.strokeStyle = rgb(shimmer, (0.2 + strength * 0.26) * (1 - band * 0.16))
+          context.lineWidth = 1.1 + strength * 0.3
+          context.stroke()
+        }
+
+        // Heat wisps peel upward from the baseline.
+        const wisps = Math.max(4, Math.min(10, Math.round(line.width / 70)))
+        for (let index = 0; index < wisps; index += 1) {
+          const phase = time * (1.7 + strength * 1.4) + index * 1.9
+          const x = line.left + (index + 0.5) * (line.width / wisps) + Math.sin(phase * 0.7) * 3
+          const height = (7 + strength * 21 + impactHeat * 10)
+            * (0.38 + 0.62 * Math.abs(Math.sin(phase * 1.2))) * power
+          context.beginPath()
+          context.moveTo(x, line.top)
+          context.bezierCurveTo(
+            x + Math.sin(phase) * 3, line.top - height * 0.35,
+            x - Math.sin(phase * 1.3) * 4, line.top - height * 0.7,
+            x + Math.sin(phase * 1.7) * 5, line.top - height,
+          )
+          context.strokeStyle = rgb(shimmer, 0.24 + strength * 0.34)
+          context.lineWidth = 1.1 + strength * 0.9
+          context.stroke()
+        }
+
+        // A low, wavy heat line under the text.
+        context.beginPath()
+        for (let x = line.left; x <= line.right; x += 4) {
+          const y = line.bottom - 1.5 + Math.sin((x - line.left) * 0.045 + time * 3.4) * 1.4
+          if (x === line.left) context.moveTo(x, y)
+          else context.lineTo(x, y)
+        }
+        context.strokeStyle = rgb(color, 0.22 + strength * 0.36)
+        context.lineWidth = 1.4 + strength * 1.1
+        context.stroke()
+
+        if (strength > 0.08 && Math.random() < 0.18 + strength * 0.22) {
+          spawnEmbers({
+            x: line.left + rand(line.width * 0.08, line.width * 0.92),
+            y: line.bottom - rand(2, 8),
+          }, 1, strength, 4)
+        }
+        context.restore()
+        context.globalAlpha = 1
+        context.shadowBlur = 0
       }
 
       /** Push the small cross-shaped hit marker at the caret. */
@@ -345,9 +807,14 @@ window.__ModuleLoader__.load({
         if (typeof editor.animate !== 'function') return
         const amount = reducedMotion ? 0.4 : 1
         try {
+          const outer = rgb(heatColor(combo >= 20 ? 1 : combo >= 8 ? 0.6 : 0.3), palette.dark ? 0.35 : 0.28)
+          const core = palette.dark ? 'rgba(255,246,213,.42)' : 'rgba(255,246,213,0)'
           trackAnimation(editor.animate([
             { textShadow: '0 0 0 transparent' },
-            { textShadow: `0 0 ${blur * amount}px ${color}, 0 0 1px ${color}`, offset: 0.18 },
+            {
+              textShadow: `0 0 ${blur * 0.25 * amount}px ${core}, 0 0 ${blur * 0.6 * amount}px ${color}, 0 0 ${blur * 0.95 * amount}px ${outer}`,
+              offset: 0.18,
+            },
             { textShadow: '0 0 0 transparent' },
           ], { duration: duration + 80, easing: 'ease-out' }))
         } catch {
@@ -401,6 +868,10 @@ window.__ModuleLoader__.load({
         clearPendingInputs()
         cancelAnimations()
         resetCombo()
+        heat = 0
+        impactHeat = 0
+        lineRect = null
+        audio.suspend()
         particles.length = 0
         waves.length = 0
         ghosts.length = 0
@@ -442,7 +913,7 @@ window.__ModuleLoader__.load({
       }
 
       /** Register one keystroke: particles, glyph, ring, glow and shake. */
-      function hit(editor, data, kind) {
+      function hit(editor, data, kind, playSound = true) {
         if (!enabled || disposed || !editor.isConnected) return
         syncEditor(editor)
         const now = clock()
@@ -450,6 +921,7 @@ window.__ModuleLoader__.load({
         const point = pointOf(caretOf(win, editor))
         if (point === null) return
         lastEditor = editor
+        lineRect = currentLineRect(editor)
 
         if (kind === 'type') {
           if (now > comboExpiresAt) combo = 0
@@ -462,41 +934,56 @@ window.__ModuleLoader__.load({
         }
 
         const strength = kind === 'submit' ? 2 : clamp(0.7 + combo * 0.012, 0.7, 1.5)
-        const accent = combo >= 50 ? palette.hot : combo >= 25 ? palette.warm : palette.accent
+        const accent = combo >= 20 ? palette.hot : combo >= 8 ? palette.warm : palette.accent
+        const fire = rgb(heatColor(heatFor(combo)))
         const chars = Array.from(data)
         const visible = chars.filter((char) => char.trim().length > 0).at(-1) ?? ''
 
         if (kind === 'submit') {
-          ring(point, 88, palette.hot, 3.2, 0.52)
-          ring(point, 50, palette.warm, 2, 0.4)
+          heat = Math.min(1, Math.max(heat, 0.4 + combo / 80))
+          impactHeat = 1
+          if (playSound) cue('impact', combo)
+          ring(point, 96, fire, 3.4, 0.55)
+          ring(point, 52, palette.warm, 2, 0.4)
           spawn(point, 34 + Math.min(28, combo * 0.5), {
             power: 1.7,
             spread: 1.2,
-            colors: [palette.hot, palette.warm, palette.accent2],
+            colors: [palette.hot, fire, palette.warm, '#fff2c9'],
           })
+          spawnEmbers({ x: point.x, y: point.y - 8 }, 16 + Math.min(16, combo * 0.3), 1, 48)
           strike(point, palette.hot, 2.6)
           shake(editor, 2.4, true)
-          glow(editor, palette.hot, 22, 340)
+          glow(editor, rgb(heatColor(1), 0.6), 18, 320)
         } else {
+          heat = Math.max(heat, heatFor(combo) * (0.72 + Math.random() * 0.18))
+          if (playSound) cue('type', combo)
           if (combo % 3 === 0) ring(point, 18 + strength * 12, accent, 1 + strength * 0.5, 0.28)
-          spawn(point, 8 + Math.min(8, combo * 0.1), {
+          spawn(point, 4 + Math.min(4, combo * 0.04), {
             power: strength,
-            spread: 0.9,
-            colors: [accent, palette.accent2, palette.warm, palette.cool],
+            spread: 0.85,
+            colors: [accent, fire, palette.warm, palette.hot],
           })
+          if (lineRect !== null) {
+            spawnEmbers({
+              x: lineRect.left + rand(lineRect.width * 0.1, lineRect.width * 0.9),
+              y: lineRect.bottom - 4,
+            }, 2 + Math.min(6, combo * 0.1), heatFor(combo), 22)
+          }
           if (visible.length > 0) ghost(point, visible, editor, accent, strength)
           strike(point, accent, strength)
           shake(editor, strength, false)
-          glow(editor, accent, 8 + strength * 8, 210)
+          glow(editor, rgb(heatColor(heatFor(combo)), 0.58), 6 + strength * 6, 190)
           if (combo > 0 && combo % 25 === 0) {
-            ring(point, 88, palette.warm, 2.4, 0.55)
+            ring(point, 92, palette.warm, 2.6, 0.55)
             strike(point, palette.warm, 2.8)
             spawn(point, 26, {
               power: 1.8,
               spread: 1.3,
-              colors: [palette.warm, palette.hot, palette.accent2],
+              colors: [palette.warm, palette.hot, fire, '#fff2c9'],
             })
+            spawnEmbers({ x: point.x, y: point.y - 8 }, 20, 1, 36)
             shake(editor, 2.2, false)
+            heat = 1
           }
         }
         ensureFrame()
@@ -551,6 +1038,10 @@ window.__ModuleLoader__.load({
           if (marker.age >= marker.life) strikes.splice(index, 1)
         }
         comboPop *= Math.pow(0.0008, delta)
+        const targetHeat = heatFor(combo)
+        const response = targetHeat > heat ? 1 - Math.pow(0.002, delta) : 1 - Math.pow(0.08, delta)
+        heat += (targetHeat - heat) * response
+        impactHeat *= Math.pow(0.02, delta)
         if (combo > 0 && now > comboExpiresAt + COMBO_FADE_MS) resetCombo()
       }
 
@@ -562,6 +1053,8 @@ window.__ModuleLoader__.load({
           || strikes.length > 0
           || (combo > 0 && now < comboExpiresAt + COMBO_FADE_MS)
           || comboPop > 0.01
+          || heat > 0.005
+          || impactHeat > 0.005
       }
 
       /** Clear the full backing store. */
@@ -618,7 +1111,17 @@ window.__ModuleLoader__.load({
           const progress = clamp(particle.age / particle.life, 0, 1)
           context.globalAlpha = Math.pow(1 - progress, 1.35)
           context.fillStyle = particle.color
-          if (particle.shape === 'streak') {
+          if (particle.shape === 'ember') {
+            context.save()
+            context.globalAlpha = Math.pow(1 - progress, 1.2) * 0.95
+            context.fillStyle = particle.color
+            context.shadowColor = particle.color
+            context.shadowBlur = 8 + particle.size * 2
+            context.beginPath()
+            context.arc(particle.x, particle.y, particle.size, 0, TAU)
+            context.fill()
+            context.restore()
+          } else if (particle.shape === 'streak') {
             context.strokeStyle = particle.color
             context.lineWidth = Math.max(1, particle.size * 0.75)
             context.lineCap = 'round'
@@ -662,6 +1165,7 @@ window.__ModuleLoader__.load({
           context.restore()
         }
 
+        drawHeat(now)
         drawCombo(now)
         context.globalAlpha = 1
         context.shadowBlur = 0
@@ -679,7 +1183,7 @@ window.__ModuleLoader__.load({
 
         const alpha = clamp((remaining + COMBO_FADE_MS) / COMBO_FADE_MS, 0, 1)
         const scale = 1 + Math.min(1, combo / 90) * 0.26 + comboPop * 0.24
-        const accent = combo >= 50 ? palette.hot : combo >= 25 ? palette.warm : palette.accent
+        const accent = combo >= 20 ? palette.hot : combo >= 8 ? palette.warm : palette.accent
         const font = `700 ${Math.round(13 * scale)}px ui-monospace, SFMono-Regular, Menlo, monospace`
         const text = `×${combo}`
         const pad = 9
@@ -799,7 +1303,10 @@ window.__ModuleLoader__.load({
         if (composition?.editor === editor) return
         if (committedInput?.editor === editor && committedInput.text !== textOf(editor)) committedInput = null
         const data = inputData(event)
-        if (data === null) return
+        if (data === null) {
+          if (textOf(editor).trim().length > 0) lineRect = currentLineRect(editor)
+          return
+        }
         cancelPendingInput(editor)
         // Firefox can send the final input after compositionend, even in a later task.
         if (isCommittedInput(editor, data)) return
@@ -855,10 +1362,20 @@ window.__ModuleLoader__.load({
       function onWindowBlur() {
         clearPendingInputs()
         resetCombo()
+        audio.suspend()
+      }
+
+      function onWindowFocus() {
+        if (enabled && soundEnabled) audio.resume()
       }
 
       function onVisibilityChange() {
-        if (doc.visibilityState === 'hidden') resetCombo()
+        if (doc.visibilityState === 'hidden') {
+          resetCombo()
+          audio.suspend()
+        } else if (enabled && soundEnabled) {
+          audio.resume()
+        }
       }
 
       function onMotionPreference(event) {
@@ -873,6 +1390,7 @@ window.__ModuleLoader__.load({
       doc.addEventListener('compositionend', onCompositionEnd, true)
       doc.addEventListener('visibilitychange', onVisibilityChange, true)
       win.addEventListener('blur', onWindowBlur)
+      win.addEventListener('focus', onWindowFocus)
       win.addEventListener('resize', resize)
       motionQuery.addEventListener?.('change', onMotionPreference)
 
@@ -896,6 +1414,12 @@ window.__ModuleLoader__.load({
         get combo() {
           return combo
         },
+        get heat() {
+          return heat
+        },
+        get soundEnabled() {
+          return soundEnabled
+        },
         setEnabled(next) {
           enabled = Boolean(next)
           try {
@@ -905,6 +1429,9 @@ window.__ModuleLoader__.load({
           }
           if (!enabled) {
             resetEffects()
+            audio.setEnabled(false)
+          } else {
+            audio.setEnabled(soundEnabled)
           }
           return enabled
         },
@@ -918,13 +1445,36 @@ window.__ModuleLoader__.load({
           }
           return intensity
         },
+        setSoundEnabled(next) {
+          soundEnabled = Boolean(next)
+          audio.setEnabled(soundEnabled)
+          if (soundEnabled && enabled) audio.resume()
+          try {
+            win.localStorage.setItem(SOUND_KEY, soundEnabled ? '1' : '0')
+          } catch {
+            // Sound preference is still honored for this page.
+          }
+          return soundEnabled
+        },
+        setVolume(next) {
+          const value = Number(next)
+          if (Number.isFinite(value)) volume = clamp(value, 0, 1)
+          audio.setEnabled(soundEnabled)
+          audio.setVolume(volume)
+          try {
+            win.localStorage.setItem(VOLUME_KEY, String(volume))
+          } catch {
+            // Same as above.
+          }
+          return volume
+        },
         burst() {
           if (!enabled || disposed) return false
           const editor = lastEditor !== null && lastEditor.isConnected
             ? lastEditor
             : doc.querySelector('[data-composer-input]')
           if (editor === null) return false
-          hit(editor, '⚡', 'submit')
+          hit(editor, '⚡', 'submit', false)
           return true
         },
         stats() {
@@ -932,6 +1482,7 @@ window.__ModuleLoader__.load({
             enabled,
             intensity,
             combo,
+            heat: Number(heat.toFixed(3)),
             particles: particles.length,
             waves: waves.length,
             ghosts: ghosts.length,
@@ -942,12 +1493,19 @@ window.__ModuleLoader__.load({
               y: Math.round(ghosts[0].y),
               age: Number(ghosts[0].age.toFixed(3)),
             },
+            sound: {
+              ...audio.stats(),
+              enabled: soundEnabled && enabled,
+              preference: soundEnabled,
+              volume,
+            },
           }
         },
         dispose() {
           if (disposed) return
           disposed = true
           resetEffects()
+          audio.dispose()
           sessionObserver?.disconnect()
           sessionObserver = null
           editorScope = null
@@ -960,6 +1518,7 @@ window.__ModuleLoader__.load({
           doc.removeEventListener('compositionend', onCompositionEnd, true)
           doc.removeEventListener('visibilitychange', onVisibilityChange, true)
           win.removeEventListener('blur', onWindowBlur)
+          win.removeEventListener('focus', onWindowFocus)
           win.removeEventListener('resize', resize)
           motionQuery.removeEventListener?.('change', onMotionPreference)
           observer?.disconnect()

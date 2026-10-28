@@ -23,7 +23,7 @@ const { JSDOM } = require('jsdom')
 const source = await readFile(resolve(root, 'client.js'), 'utf8')
 const settle = () => new Promise((resolve) => setTimeout(resolve, 30))
 
-function mount(t, { textarea = false } = {}) {
+function mount(t, { textarea = false, fakeAudio = false } = {}) {
   const editorMarkup = textarea
     ? '<textarea data-composer-input></textarea>'
     : '<div data-composer-input contenteditable="true" role="textbox"></div>'
@@ -69,6 +69,64 @@ function mount(t, { textarea = false } = {}) {
       return true
     },
   })
+  if (fakeAudio) {
+    class Param {
+      constructor(value = 0) { this.value = value }
+      setValueAtTime() {}
+      exponentialRampToValueAtTime() {}
+      cancelScheduledValues() {}
+      setTargetAtTime() {}
+    }
+    class Node {
+      connect() {}
+      disconnect() {}
+    }
+    class Source extends Node {
+      constructor() {
+        super()
+        this.frequency = new Param()
+        this.type = 'sine'
+        this.buffer = null
+        this.onended = null
+      }
+      start() {}
+      stop() {}
+    }
+    class FakeAudioContext {
+      constructor() {
+        this.state = 'running'
+        this.currentTime = 0
+        this.sampleRate = 44100
+        this.destination = new Node()
+      }
+      createGain() { const node = new Node(); node.gain = new Param(1); return node }
+      createOscillator() { return new Source() }
+      createBufferSource() { return new Source() }
+      createBiquadFilter() {
+        const node = new Node()
+        node.frequency = new Param()
+        node.Q = new Param()
+        node.type = 'lowpass'
+        return node
+      }
+      createDynamicsCompressor() {
+        const node = new Node()
+        node.threshold = new Param()
+        node.knee = new Param()
+        node.ratio = new Param()
+        node.attack = new Param()
+        node.release = new Param()
+        return node
+      }
+      createBuffer(channels, length) {
+        return { getChannelData: () => new Float32Array(length) }
+      }
+      resume() { this.state = 'running'; return Promise.resolve() }
+      suspend() { this.state = 'suspended'; return Promise.resolve() }
+      close() { this.state = 'closed'; return Promise.resolve() }
+    }
+    window.AudioContext = FakeAudioContext
+  }
   window.HTMLCanvasElement.prototype.getContext = () => context
   const editor = document.querySelector('[data-composer-input]')
   const conversation = editor.closest('[data-conversation-content]')
@@ -745,3 +803,47 @@ for (const pending of ['controlled-input', 'composition-commit']) {
     assert.equal(f.api.combo, 1)
   })
 }
+
+test('typing warms the text and schedules a key tick', async (t) => {
+  const f = mount(t, { fakeAudio: true })
+  for (const [index, char] of Array.from('abcd').entries()) {
+    f.text('abcd'.slice(0, index + 1))
+    f.input('input', { data: char })
+  }
+  await settle()
+  const stats = f.api.stats()
+  assert.equal(stats.combo, 4)
+  assert.ok(stats.heat > 0, 'typing must warm the text')
+  assert.ok(stats.sound.played > 0, 'each committed key should schedule a tick')
+  assert.ok(stats.sound.voices > 0)
+  f.enter()
+  const after = f.api.stats()
+  assert.ok(after.sound.played > stats.sound.played, 'Enter should add an impact cue')
+  assert.ok(after.particles > stats.particles)
+})
+
+test('sound preference, volume and heat reset through the runtime API', (t) => {
+  const f = mount(t)
+  assert.equal(f.api.soundEnabled, true)
+  assert.equal(f.api.setSoundEnabled(false), false)
+  assert.equal(f.api.stats().sound.enabled, false)
+  assert.equal(f.window.localStorage.getItem('dsh-power-type.sound'), '0')
+  assert.equal(f.api.setVolume(0.35), 0.35)
+  assert.equal(f.api.stats().sound.volume, 0.35)
+  assert.equal(f.window.localStorage.getItem('dsh-power-type.volume'), '0.35')
+  f.api.setSoundEnabled(true)
+  assert.equal(f.api.soundEnabled, true)
+})
+
+test('disable clears the heat and releases its frame', async (t) => {
+  const f = mount(t)
+  f.text('a')
+  f.input('input', { data: 'a' })
+  await settle()
+  assert.ok(f.api.stats().heat > 0)
+  assert.ok(f.frames.size > 0)
+  f.api.setEnabled(false)
+  assert.equal(f.api.stats().heat, 0)
+  assertEmpty(f.api)
+  assert.equal(f.frames.size, 0)
+})

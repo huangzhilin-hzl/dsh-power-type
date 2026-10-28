@@ -1,7 +1,7 @@
 /**
  * Record the demo as a short animated preview.
  *
- * Usage: node test/screencast.mjs [output.gif] [seconds] [query]
+ * Usage: node test/screencast.mjs [output.gif] [seconds] [query] [x,y,w,h]
  * Produces the GIF with the system `python3` + Pillow, then removes the frames.
  */
 import { spawn, spawnSync } from 'node:child_process'
@@ -14,6 +14,8 @@ const root = resolve(here, '..')
 const output = resolve(root, process.argv[2] ?? 'demo/preview.gif')
 const seconds = Number(process.argv[3] ?? 3)
 const query = process.argv[4] ?? '?speed=110'
+const crop = (process.argv[5] ?? '280,450,940,250').split(',').map(Number)
+if (crop.length !== 4 || crop.some((value) => !Number.isFinite(value))) throw new Error('crop must be x,y,w,h')
 const frameDir = resolve(root, 'demo/.frames')
 const port = 9339
 const chrome = process.env.CHROME_PATH
@@ -103,7 +105,7 @@ await send('Page.startScreencast', {
 await sleep(seconds * 1000)
 await send('Page.stopScreencast')
 
-const sampled = frames.filter((_, index) => index % 2 === 0)
+const sampled = frames.filter((_, index) => index % 3 === 0)
 for (let index = 0; index < sampled.length; index += 1) {
   await writeFile(resolve(frameDir, `frame-${String(index).padStart(4, '0')}.png`), Buffer.from(sampled[index], 'base64'))
 }
@@ -119,12 +121,11 @@ paths = sorted(glob.glob(${JSON.stringify(resolve(frameDir, 'frame-*.png'))}))
 frames = []
 for path in paths:
     image = Image.open(path).convert('RGB')
-    # composer area plus the combo pill and a little breathing room
-    image = image.crop((280, 450, 1220, 700)).resize((752, 200), Image.LANCZOS)
+    image = image.crop((${JSON.stringify(crop[0])}, ${JSON.stringify(crop[1])}, ${JSON.stringify(crop[0] + crop[2])}, ${JSON.stringify(crop[1] + crop[3])})).resize((640, ${Math.round(640 * crop[3] / crop[2])}), Image.LANCZOS)
     frames.append(image)
 if not frames:
     sys.exit('no frames captured')
-frames[0].save(${JSON.stringify(output)}, save_all=True, append_images=frames[1:], duration=33, loop=0, optimize=True)
+frames[0].save(${JSON.stringify(output)}, save_all=True, append_images=frames[1:], duration=50, loop=0, optimize=True)
 print('gif bytes', os.path.getsize(${JSON.stringify(output)}))
 `
 const result = spawnSync('python3', ['-c', script], { stdio: 'inherit' })

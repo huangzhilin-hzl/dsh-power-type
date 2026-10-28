@@ -1,8 +1,8 @@
 {
   "name": "dsh-power-type",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Typing impact effects for the DSH web composer: sparks, glyph shockwaves, composer shake and combo counts.",
+  "description": "Power Mode typing effects with a heat-and-ember text aura, combo reddening and synthesized impact audio for the DSH web composer.",
   "type": "module",
   "icon": "icon.svg",
   "exports": {
