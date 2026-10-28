@@ -2,16 +2,17 @@
 
 [English](README.md) | 中文
 
-为 **DeepSeek Harness（DSH）Web 输入框**添加 Power Mode 打字特效。
+为 **DeepSeek Harness（DSH）Web 输入框**添加 Power Mode 打字特效：粒子、冲击波、连击、热浪与余烬。
 
 ![Power Type 特效演示](demo/preview.gif)
 
 ## 功能
 
-- 光标粒子与文字发光残影。
-- 输入区域震动与连击计数。
-- 支持中文等输入法的组合输入。
-- Enter 触发粒子爆发与冲击波。
+- 光标粒子、文字发光残影与输入框震动。
+- 连击越高，当前输入行会越热：暖黄 → 橙色 → 红色，伴随热浪细纹和上升余烬。
+- 热浪只包当前文字行，不画输入框边框，也不出结算卡片。
+- 每次敲击有轻量合成音效，Enter 有更重的冲击音；可独立关闭或调音量。
+- 支持中文等输入法的组合输入；深色/浅色主题自动适配。
 
 ## 安装
 
@@ -41,13 +42,15 @@ dsh plugin --profile web add /absolute/path/to/dsh-power-type
 
 在输入框中打字即可，特效默认开启。可在 **插件 → 已安装插件 → Power Type** 中启用或停用插件。
 
-在浏览器控制台调整特效强度：
+在浏览器控制台调整特效强度和音效：
 
 ```js
-window.__dshPowerType.setIntensity(1.5) // 默认 1，范围 0.2–2.5
+window.__dshPowerType.setIntensity(1.5)     // 默认 1，范围 0.2–2.5
+window.__dshPowerType.setSoundEnabled(false) // 关闭敲击/Enter 音效
+window.__dshPowerType.setVolume(0.5)         // 0–1，默认 0.7
 ```
 
-强度设置保存在当前浏览器本地。
+设置保存在当前浏览器本地。
 
 ## 卸载
 
@@ -72,4 +75,4 @@ node --test test/dsh.test.mjs
 
 设置 `DSH_PLUGIN_SPEC=github:huangzhilin-hzl/dsh-power-type`，可验证远程包的 DSH 集成。
 
-打开 [demo/index.html](demo/index.html) 可查看独立视觉演示。
+打开 [demo/index.html](demo/index.html) 可查看独立视觉演示；[demo/index.html?heat=1](demo/index.html?heat=1) 会持续输入以展示热浪，加 `&theme=light` 可查看浅色主题。

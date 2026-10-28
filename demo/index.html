@@ -75,6 +75,32 @@
     display: grid; place-items: center; color: white; font-size: 16px;
   }
   .hint { max-width: 820px; margin: 10px auto 0; color: #66748f; font-size: 12px; text-align: center; }
+  body.light {
+    --bg: #f3efe5;
+    --panel: #fffdf7;
+    --card: #fffdf7;
+    --line: rgba(30,25,20,.12);
+    --text: #1d1a17;
+    --muted: #6f665c;
+    --accent: #2f6fdd;
+    --dsw-alias-state-business-primary: #2f6fdd;
+    --dsw-alias-brand-primary-new-colorprimary-new-color: #5b8ef0;
+    --dsw-static-amber-400: #b7791f;
+    --dsw-static-red-400: #c2413a;
+    --dsw-static-green-400: #2f8a57;
+    --dsw-alias-label-primary: #1d1a17;
+    background: #f3efe5;
+    color: var(--text);
+  }
+  body.light .sidebar { background: rgba(255,253,247,.8); }
+  body.light .bubble { background: rgba(30,25,20,.035); color: #3a332c; }
+  body.light .bubble.user { background: rgba(47,111,221,.09); color: #1d3a66; }
+  body.light .side-item { color: #6f665c; }
+  body.light .side-item.active { color: #17345f; background: rgba(47,111,221,.11); }
+  body.light .chip { color: #6f665c; background: rgba(30,25,20,.025); }
+  body.light .hint { color: #8a8175; }
+  body.light #stats { color: #5a5248; background: rgba(255,253,247,.8); border-color: var(--line); }
+  body.light .composer { background: var(--card); box-shadow: 0 24px 70px rgba(42,35,26,.16), 0 0 0 1px var(--line), inset 0 1px 0 rgba(255,255,255,.8); }
   [data-shell-overlay] { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
   #stats {
     position: fixed; left: 18px; bottom: 16px; z-index: 30;
@@ -97,7 +123,7 @@
     <section class="conversation">
       <h1>让每一次敲击都有回响</h1>
       <p>下面是一个模拟的 DSH 输入框，插件正在监听真实的 input 事件。</p>
-      <div class="bubble">粒子、字符冲击波、输入框震动和连击计数会在输入时同时出现。</div>
+      <div class="bubble">粒子、字符冲击波、输入框震动和连击计数会在输入时同时出现；连击越高，文字越热。</div>
       <div class="bubble user">参考 IntelliJ 的 Power Mode：打字不只是显示文字，还要有打击感。</div>
       <div class="bubble">继续输入，连击数会在输入框右上角累加。</div>
     </section>
@@ -112,7 +138,7 @@
           <span class="send">↑</span>
         </div>
       </div>
-      <div class="hint">Enter 发送 · Shift+Enter 换行 · 输入时触发特效</div>
+      <div class="hint">Enter 发送 · Shift+Enter 换行 · 连击越高，文字越红</div>
     </div>
   </main>
   <div data-shell-overlay></div>
@@ -171,8 +197,12 @@
   editor.addEventListener('input', (event) => event.stopPropagation())
   editor.addEventListener('keydown', (event) => event.stopPropagation())
   const stats = document.getElementById('stats')
-  const sample = '打字也可以有打击感。Power Mode 的爽点在于粒子、屏幕震动和 Combo。'
   const params = new URLSearchParams(location.search)
+  const heatDemo = params.get('heat') === '1'
+  if (params.get('theme') === 'light') document.body.classList.add('light')
+  const sample = heatDemo
+    ? '让每一次敲击都有回响，热浪和余烬会跟着连击一起升温。Power Type 的打击感，是粒子、输入框震动、字符冲击波和合成音效。继续敲击，文字会从暖黄变成红色。'
+    : '打字也可以有打击感。Power Mode 的爽点在于粒子、屏幕震动和 Combo。'
   const stepMs = Number(params.get('speed') ?? 120)
   const freezeAfter = Number(params.get('freeze') ?? 0)
   let index = 0
@@ -197,7 +227,11 @@
       data: char,
     }))
     index += 1
-    if (index % 34 === 0) {
+    if (heatDemo && index >= sample.length) {
+      editor.textContent = ''
+      index = 0
+      placeCaret()
+    } else if (!heatDemo && index % 34 === 0) {
       editor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
       sent += 1
       setTimeout(() => {
@@ -239,6 +273,8 @@
       'particles ' + state.particles,
       'waves     ' + state.waves,
       'ghosts    ' + state.ghosts,
+      'heat      ' + state.heat,
+      'sound     ' + state.sound.enabled + (state.sound.ready ? ' on' : ' idle'),
       'sent      ' + sent,
       'raf       ' + (stats.dataset.raf || '0'),
     ].join('\n')

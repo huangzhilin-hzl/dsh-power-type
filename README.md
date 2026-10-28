@@ -2,16 +2,17 @@
 
 English | [中文](README.zh.md)
 
-Power Mode typing effects for the **DeepSeek Harness (DSH) Web composer**.
+Power Mode typing effects for the **DeepSeek Harness (DSH) Web composer**: sparks, shockwaves, combo, heat and embers.
 
 ![Power Type demo](demo/preview.gif)
 
 ## Features
 
-- Caret particles and glowing character echoes.
-- Editor shake and combo streaks.
-- Chinese and other IME composition support.
-- Enter-triggered bursts and shockwaves.
+- Caret particles, glowing character echoes and editor shake.
+- The current text line heats up with the streak: amber → orange → red, with heat shimmer and rising embers.
+- Heat wraps the text only: no composer border and no settlement card.
+- A quiet synthesized tick per keystroke; a heavier impact on Enter, with independent mute and volume.
+- Chinese and other IME composition support, plus light/dark theme adaptation.
 
 ## Installation
 
@@ -41,13 +42,15 @@ Local installation uses a directory link, so keep that directory in place.
 
 Start typing in the composer. Effects are enabled by default. Toggle the plugin under **Plugins → Installed plugins → Power Type**.
 
-Adjust intensity in the browser console:
+Adjust intensity and sound in the browser console:
 
 ```js
-window.__dshPowerType.setIntensity(1.5) // Default: 1; range: 0.2–2.5
+window.__dshPowerType.setIntensity(1.5)      // Default: 1; range: 0.2–2.5
+window.__dshPowerType.setSoundEnabled(false) // Mute key/Enter cues
+window.__dshPowerType.setVolume(0.5)         // 0–1, default 0.7
 ```
 
-The intensity setting is saved locally in the browser.
+Settings are saved locally in the browser.
 
 ## Uninstall
 
@@ -72,4 +75,4 @@ Browser tests require Chrome/Chromium. DSH integration also requires `pnpm` and 
 
 Set `DSH_PLUGIN_SPEC=github:huangzhilin-hzl/dsh-power-type` to run the DSH integration test against the remote package.
 
-Open [demo/index.html](demo/index.html) for a standalone visual demo.
+Open [demo/index.html](demo/index.html) for a standalone visual demo, or [demo/index.html?heat=1](demo/index.html?heat=1) for a continuous heat demo. Add `&theme=light` for the light theme.
