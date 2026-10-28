@@ -403,15 +403,16 @@ window.__ModuleLoader__.load({
           }
         },
         /** Submit impact: body weight, paper noise and a bright confirm. */
-        impact(combo) {
+        impact() {
           if (!canPlay(MAX_VOICES)) return
           played += 1
-          const p = clamp((Number(combo) || 0) / 30, 0, 1)
-          const body = 140 * (0.97 + Math.random() * 0.06)
-          voice({ wave: 'sine', f0: body, f1: 46, dur: 0.3, gain: 0.68, cut: 600, q: 0.5, attack: 0.006 })
-          voice({ wave: 'sine', f0: 190, f1: 96, dur: 0.18, gain: 0.3, cut: 700, q: 0.5, at: 0.004 })
-          voice({ noise: true, type: 'lowpass', cut: 500, q: 0.4, dur: 0.025, gain: 0.035 })
-          voice({ wave: 'sine', f0: 300 + p * 40, f1: 250 + p * 30, dur: 0.14, gain: 0.06, cut: 900, q: 0.5, at: 0.02 })
+          // Soft G-major chime over a low body: warm, short and legible without
+          // any square/triangle harmonics or bright noise.
+          voice({ noise: true, type: 'lowpass', cut: 900, q: 0.4, dur: 0.04, gain: 0.08 })
+          voice({ wave: 'sine', f0: 110, f1: 55, dur: 0.2, gain: 0.5, cut: 450, q: 0.5, attack: 0.005 })
+          voice({ wave: 'sine', f0: 196, f1: 196, dur: 0.32, gain: 0.36, cut: 1200, q: 0.5, at: 0.02 })
+          voice({ wave: 'sine', f0: 293.66, f1: 293.66, dur: 0.28, gain: 0.2, cut: 1400, q: 0.5, at: 0.05 })
+          voice({ wave: 'sine', f0: 392, f1: 392, dur: 0.26, gain: 0.14, cut: 1600, q: 0.5, at: 0.1 })
         },
         suspend() {
           paused = true
