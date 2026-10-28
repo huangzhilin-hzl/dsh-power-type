@@ -407,11 +407,11 @@ window.__ModuleLoader__.load({
           if (!canPlay(MAX_VOICES)) return
           played += 1
           const p = clamp((Number(combo) || 0) / 30, 0, 1)
-          const body = 150 * (0.97 + Math.random() * 0.06)
-          voice({ wave: 'sine', f0: body, f1: 44, dur: 0.24, gain: 0.5, cut: 900, q: 0.7, attack: 0.004 })
-          voice({ wave: 'square', f0: 220, f1: 90, dur: 0.06, gain: 0.08, cut: 1600, q: 0.8, at: 0.012 })
-          voice({ noise: true, type: 'bandpass', cut: 1700, q: 0.9, dur: 0.07, gain: 0.16 })
-          voice({ wave: 'triangle', f0: 520 + p * 260, f1: 760 + p * 340, dur: 0.16, gain: 0.06, cut: 5200, q: 0.6, at: 0.02 })
+          const body = 140 * (0.97 + Math.random() * 0.06)
+          voice({ wave: 'sine', f0: body, f1: 42, dur: 0.26, gain: 0.48, cut: 700, q: 0.6, attack: 0.005 })
+          voice({ wave: 'triangle', f0: 170, f1: 100, dur: 0.09, gain: 0.13, cut: 1100, q: 0.7, at: 0.008 })
+          voice({ noise: true, type: 'lowpass', cut: 900, q: 0.5, dur: 0.055, gain: 0.07 })
+          voice({ wave: 'triangle', f0: 330 + p * 60, f1: 392 + p * 80, dur: 0.2, gain: 0.055, cut: 2400, q: 0.5, at: 0.03 })
         },
         suspend() {
           paused = true
