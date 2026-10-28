@@ -48,7 +48,7 @@ dsh plugin --profile web add /absolute/path/to/dsh-power-type
 ```js
 window.__dshPowerType.setIntensity(1.5)     // 默认 1，范围 0.2–2.5
 window.__dshPowerType.setSoundEnabled(false) // 关闭敲击/Enter 音效
-window.__dshPowerType.setVolume(0.5)         // 0–1，默认 0.8
+window.__dshPowerType.setVolume(0.5)         // 0–1，默认 0.9
 ```
 
 设置保存在当前浏览器本地。
