@@ -385,7 +385,7 @@ window.__ModuleLoader__.load({
           return volume
         },
         /** A short pentatonic blip whose pitch climbs with the streak. */
-        type(combo) {
+        type(combo, density = 1) {
           if (!canPlay(TYPE_VOICES)) return
           const now = context.currentTime
           if (now - lastType < 0.022) {
@@ -393,13 +393,23 @@ window.__ModuleLoader__.load({
             return
           }
           lastType = now
-          played += 1
-          const p = clamp((Number(combo) || 0) / 30, 0, 1)
-          const degree = DEGREES[Math.min(DEGREES.length - 1, Math.round(p * (DEGREES.length - 1)))]
-          const frequency = 196 * Math.pow(2, degree / 12)
-          voice({ wave: 'sine', f0: frequency, f1: frequency * 1.02, dur: 0.062, gain: 0.18, cut: 1800, q: 0.6 })
-          voice({ wave: 'sine', f0: frequency / 2, f1: frequency / 2, dur: 0.08, gain: 0.05, cut: 900, q: 0.5 })
+          const count = Math.max(1, Math.min(3, Math.round(Number(density) || 1)))
+          const base = Math.max(1, (Number(combo) || 0) - count + 1)
+          for (let index = 0; index < count; index += 1) {
+            const p = clamp((base + index) / 30, 0, 1)
+            const degree = DEGREES[Math.min(DEGREES.length - 1, Math.round(p * (DEGREES.length - 1)) + index)]
+            const frequency = 196 * Math.pow(2, degree / 12)
+            const at = index * 0.032
+            voice({ wave: 'sine', f0: frequency, f1: frequency * 1.02, dur: 0.062, gain: index === 0 ? 0.18 : 0.13, cut: 1800, q: 0.6, at })
+            if (index === 0) {
+              voice({ wave: 'sine', f0: frequency / 2, f1: frequency / 2, dur: 0.08, gain: 0.05, cut: 900, q: 0.5, at })
+            }
+            played += 1
+          }
           if ((Number(combo) || 0) > 0 && Number(combo) % 25 === 0) {
+            const firstP = clamp(Math.max(1, (Number(combo) || 0) - count + 1) / 30, 0, 1)
+            const firstDegree = DEGREES[Math.min(DEGREES.length - 1, Math.round(firstP * (DEGREES.length - 1)))]
+            const frequency = 196 * Math.pow(2, firstDegree / 12)
             voice({ wave: 'sine', f0: frequency / 2, f1: frequency / 2, dur: 0.12, gain: 0.08, cut: 1200, q: 0.7 })
           }
         },
@@ -924,9 +934,12 @@ window.__ModuleLoader__.load({
         lastEditor = editor
         lineRect = currentLineRect(editor)
 
+        const chars = Array.from(data)
+        const glyphCount = Math.max(1, chars.filter((char) => char.trim().length > 0).length)
+        const density = kind === 'type' ? Math.min(4, glyphCount) : 1
         if (kind === 'type') {
           if (now > comboExpiresAt) combo = 0
-          combo += 1
+          combo += density
           comboExpiresAt = now + IDLE_RESET_MS
           comboPop = 1
         } else {
@@ -937,7 +950,6 @@ window.__ModuleLoader__.load({
         const strength = kind === 'submit' ? 2 : clamp(0.7 + combo * 0.012, 0.7, 1.5)
         const accent = combo >= 20 ? palette.hot : combo >= 8 ? palette.warm : palette.accent
         const fire = rgb(heatColor(heatFor(combo)))
-        const chars = Array.from(data)
         const visible = chars.filter((char) => char.trim().length > 0).at(-1) ?? ''
 
         if (kind === 'submit') {
@@ -957,7 +969,7 @@ window.__ModuleLoader__.load({
           glow(editor, rgb(heatColor(1), 0.6), 18, 320)
         } else {
           heat = Math.max(heat, heatFor(combo) * (0.72 + Math.random() * 0.18))
-          if (playSound) cue('type', combo)
+          if (playSound) cue('type', combo, density)
           if (combo % 3 === 0) ring(point, 18 + strength * 12, accent, 1 + strength * 0.5, 0.28)
           spawn(point, 4 + Math.min(4, combo * 0.04), {
             power: strength,
