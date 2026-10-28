@@ -47,7 +47,7 @@ Adjust intensity and sound in the browser console:
 ```js
 window.__dshPowerType.setIntensity(1.5)      // Default: 1; range: 0.2–2.5
 window.__dshPowerType.setSoundEnabled(false) // Mute key/Enter cues
-window.__dshPowerType.setVolume(0.5)         // 0–1, default 0.7
+window.__dshPowerType.setVolume(0.5)         // 0–1, default 0.8
 ```
 
 Settings are saved locally in the browser.

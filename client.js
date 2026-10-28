@@ -72,9 +72,9 @@ window.__ModuleLoader__.load({
     function readVolume(win) {
       try {
         const raw = win.localStorage.getItem(VOLUME_KEY)
-        if (raw === null) return 0.7
+        if (raw === null) return 0.8
         const value = Number(raw)
-        return Number.isFinite(value) && value >= 0 ? clamp(value, 0, 1) : 0.7
+        return Number.isFinite(value) && value >= 0 ? clamp(value, 0, 1) : 0.8
       } catch {
         return 0.7
       }
@@ -217,7 +217,7 @@ window.__ModuleLoader__.load({
      * submit thump. No audio files, no network, no timers.
      */
     function createImpactAudio(win) {
-      const BASE_GAIN = 0.7
+      const BASE_GAIN = 1.0
       const CURVE = 1.6
       const MAX_VOICES = 14
       const TYPE_VOICES = 7
@@ -230,7 +230,7 @@ window.__ModuleLoader__.load({
       let compressor = null
       let noise = null
       let enabled = true
-      let volume = 0.7
+      let volume = 0.8
       let played = 0
       let dropped = 0
       let paused = false
@@ -397,7 +397,7 @@ window.__ModuleLoader__.load({
           const p = clamp((Number(combo) || 0) / 30, 0, 1)
           const degree = DEGREES[Math.min(DEGREES.length - 1, Math.round(p * (DEGREES.length - 1)))]
           const frequency = 196 * Math.pow(2, degree / 12)
-          voice({ wave: 'triangle', f0: frequency, f1: frequency * 1.03, dur: 0.045, gain: 0.055, cut: 2600, q: 0.8 })
+          voice({ wave: 'triangle', f0: frequency, f1: frequency * 1.03, dur: 0.05, gain: 0.075, cut: 2400, q: 0.8 })
           if ((Number(combo) || 0) > 0 && Number(combo) % 25 === 0) {
             voice({ wave: 'sine', f0: frequency / 2, f1: frequency / 2, dur: 0.12, gain: 0.07, cut: 1200, q: 0.7 })
           }
@@ -408,10 +408,10 @@ window.__ModuleLoader__.load({
           played += 1
           const p = clamp((Number(combo) || 0) / 30, 0, 1)
           const body = 140 * (0.97 + Math.random() * 0.06)
-          voice({ wave: 'sine', f0: body, f1: 42, dur: 0.26, gain: 0.48, cut: 700, q: 0.6, attack: 0.005 })
-          voice({ wave: 'triangle', f0: 170, f1: 100, dur: 0.09, gain: 0.13, cut: 1100, q: 0.7, at: 0.008 })
-          voice({ noise: true, type: 'lowpass', cut: 900, q: 0.5, dur: 0.055, gain: 0.07 })
-          voice({ wave: 'triangle', f0: 330 + p * 60, f1: 392 + p * 80, dur: 0.2, gain: 0.055, cut: 2400, q: 0.5, at: 0.03 })
+          voice({ wave: 'sine', f0: body, f1: 48, dur: 0.26, gain: 0.62, cut: 800, q: 0.6, attack: 0.005 })
+          voice({ wave: 'triangle', f0: 240, f1: 150, dur: 0.12, gain: 0.24, cut: 1200, q: 0.7, at: 0.006 })
+          voice({ noise: true, type: 'lowpass', cut: 1100, q: 0.5, dur: 0.06, gain: 0.11 })
+          voice({ wave: 'triangle', f0: 330 + p * 60, f1: 392 + p * 80, dur: 0.2, gain: 0.09, cut: 2600, q: 0.5, at: 0.03 })
         },
         suspend() {
           paused = true
