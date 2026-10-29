@@ -6,5 +6,7 @@ coverage/
 .env.*
 *.log
 demo/*.png
+!demo/preview-burst.png
+!demo/preview-final.png
 demo/local-*.gif
 demo/.frames/

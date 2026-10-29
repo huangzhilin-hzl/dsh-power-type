@@ -1,10 +1,26 @@
 {
   "name": "dsh-power-type",
   "version": "0.2.0",
-  "private": true,
   "description": "Power Mode typing effects with a heat-and-ember text aura, combo reddening and synthesized impact audio for the DSH web composer.",
   "type": "module",
   "icon": "icon.svg",
+  "license": "MIT",
+  "author": "huangzhilin",
+  "homepage": "https://github.com/huangzhilin-hzl/dsh-power-type#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/huangzhilin-hzl/dsh-power-type.git"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "dsh",
+    "deepseek-harness",
+    "power-mode",
+    "typing-effect",
+    "web-composer",
+    "particles",
+    "sound"
+  ],
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",

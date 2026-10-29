@@ -2,9 +2,11 @@
 
 [English](README.md) | 中文
 
+[![npm](https://img.shields.io/npm/v/dsh-power-type)](https://www.npmjs.com/package/dsh-power-type) [![license](https://img.shields.io/npm/l/dsh-power-type)](LICENSE)
+
 为 **DeepSeek Harness（DSH）Web 输入框**添加 Power Mode 打字特效：粒子、冲击波、连击、热浪与余烬。
 
-![Power Type 特效演示](demo/preview.gif)
+![Power Type 特效演示](https://raw.githubusercontent.com/huangzhilin-hzl/dsh-power-type/main/demo/preview.gif)
 
 ## 功能
 
@@ -17,7 +19,13 @@
 
 ## 安装
 
-需要 DSH Web `>=0.2.1-rc.2 <0.3.0`。直接从 GitHub 安装：
+需要 DSH Web `>=0.2.1-rc.2 <0.3.0`。
+
+```sh
+dsh plugin --profile web add dsh-power-type
+```
+
+想装仓库当前提交而不是已发布版本，直接从 GitHub 安装：
 
 ```sh
 dsh plugin --profile web add github:huangzhilin-hzl/dsh-power-type

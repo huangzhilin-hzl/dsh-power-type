@@ -2,9 +2,11 @@
 
 English | [中文](README.zh.md)
 
+[![npm](https://img.shields.io/npm/v/dsh-power-type)](https://www.npmjs.com/package/dsh-power-type) [![license](https://img.shields.io/npm/l/dsh-power-type)](LICENSE)
+
 Power Mode typing effects for the **DeepSeek Harness (DSH) Web composer**: sparks, shockwaves, combo, heat and embers.
 
-![Power Type demo](demo/preview.gif)
+![Power Type demo](https://raw.githubusercontent.com/huangzhilin-hzl/dsh-power-type/main/demo/preview.gif)
 
 ## Features
 
@@ -17,7 +19,13 @@ Power Mode typing effects for the **DeepSeek Harness (DSH) Web composer**: spark
 
 ## Installation
 
-Requires DSH Web `>=0.2.1-rc.2 <0.3.0`. Install directly from GitHub:
+Requires DSH Web `>=0.2.1-rc.2 <0.3.0`.
+
+```sh
+dsh plugin --profile web add dsh-power-type
+```
+
+To install the current commit instead of the published release, use the repository:
 
 ```sh
 dsh plugin --profile web add github:huangzhilin-hzl/dsh-power-type
